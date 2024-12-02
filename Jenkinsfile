@@ -2,49 +2,35 @@ pipeline {
     agent any
 
     environment {
-        // Optional: Set up a Python virtual environment if needed
-        VIRTUAL_ENV = 'venv'
+        DOCKER_IMAGE = 'python:3.11-slim'  
+        CONTAINER_NAME = 'pytest-container'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                // Checkout the code from your repository
                 checkout scm
             }
         }
 
-        stage('Set up Python Environment') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    // Optional: Set up a virtual environment if required
-                    if (!fileExists(VIRTUAL_ENV)) {
-                        sh 'python3 -m venv venv'
-                    }
-                    // Activate the virtual environment
-                    sh 'source venv/bin/activate'
+                    sh 'docker build -t my-python-tests .'
                 }
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Run Tests with Pytest in Docker') {
             steps {
                 script {
-                    // Install dependencies (e.g., requirements.txt)
-                    sh 'source venv/bin/activate && pip install -r requirements.txt'
+                    sh """
+                        docker run --rm -v \$(pwd):/app my-python-tests
+                    """
                 }
             }
         }
 
-        stage('Run Tests with Pytest') {
-            steps {
-                script {
-                    // Run pytest to execute your tests
-                    sh 'source venv/bin/activate && pytest --maxfail=5 --disable-warnings'
-                }
-            }
-        }
-        
         stage('Archive Test Results') {
             steps {
                 junit '**/tests/results/*.xml'  
@@ -54,8 +40,7 @@ pipeline {
 
     post {
         always {
-           
-            sh 'deactivate || true'
+            sh 'docker ps -a -q --filter "name=${CONTAINER_NAME}" | xargs --no-run-if-empty docker rm'
         }
     }
 }

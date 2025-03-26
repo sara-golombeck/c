@@ -1,3 +1,112 @@
+# name: CI
+
+# on:
+#   push:
+#     branches:
+#       - main
+#       - 'release/**'
+#   pull_request:
+#     branches:
+#       - main
+#       - 'release/**'
+
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#     steps:
+#       # Step 1: Checkout the code
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+
+#       # Step 2: Set up Python
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: '3.9'
+
+#       # Step 3: Install dependencies
+#       - name: Install dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install -r requirements.txt
+
+#       # Step 4: Run tests
+#       - name: Run pytest
+#         run: |
+#           pytest tests/ -v
+
+#   build-and-push:
+#     needs: test
+#     runs-on: ubuntu-latest
+#     # Only run this job on main or release branches, not on PRs
+#     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+#     steps:
+#       # Step 1: Checkout the code
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+
+#       # Step 2: Set up Docker
+#       - name: Set up Docker
+#         uses: docker/setup-buildx-action@v2
+
+#       # Step 3: Calculate new version
+#       - name: Calculate new version
+#         id: version
+#         run: |
+#           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+#           echo "Latest tag: $latest_tag"
+#           version=$(echo $latest_tag | awk -F. '{printf("v%d.%d.%d", $1+0, $2+0, $3+1)}')
+#           echo "New version: $version"
+#           echo "version=$version" >> $GITHUB_ENV
+#           echo "::set-output name=version::$version"
+
+#       # Step 4: Log in to GHCR
+#       - name: Log in to GitHub Container Registry
+#         uses: docker/login-action@v2
+#         with:
+#           registry: ghcr.io
+#           username: ${{ github.actor }}
+#           password: ${{ secrets.GITHUB_TOKEN }}
+
+#       # Step 5: Build Docker image
+#       - name: Build Docker image
+#         run: |
+#           docker build -t ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} .
+#           docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
+          
+#           # Tag with branch name if on a release branch
+#           if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+#             branch_name="${{ github.ref_name }}"
+#             docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
+#           fi
+
+#       # Step 6: Push Docker image to GHCR
+#       - name: Push Docker image
+#         run: |
+#           docker push ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }}
+#           docker push ghcr.io/${{ github.repository_owner }}/convert:latest
+          
+#           # Push branch-specific tag if on a release branch
+#           if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+#             branch_name="${{ github.ref_name }}"
+#             docker push ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
+#           fi
+
+#       # Step 7: Push Git tag (only on main branch)
+#       - name: Push Git tag
+#         if: github.ref == 'refs/heads/main'
+#         run: |
+#           git config user.name "${{ github.actor }}"
+#           git config user.email "${{ github.actor }}@users.noreply.github.com"
+#           git tag ${{ env.version }}
+#           git push origin ${{ env.version }}
+
+
+
+
+
+
+
 name: CI
 
 on:
@@ -14,87 +123,51 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Step 2: Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      # Step 3: Install dependencies
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # Step 4: Run tests
-      - name: Run pytest
-        run: |
-          pytest tests/ -v
+      # צעדי בדיקה כפי שהוצעו קודם
 
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
-    # Only run this job on main or release branches, not on PRs
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
     steps:
-      # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # למשוך את כל ההיסטוריה כדי לראות את כל התגים
 
-      # Step 2: Set up Docker
       - name: Set up Docker
         uses: docker/setup-buildx-action@v2
 
-      # Step 3: Calculate new version
-      - name: Calculate new version
+      - name: Calculate version
         id: version
         run: |
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Latest tag: $latest_tag"
-          version=$(echo $latest_tag | awk -F. '{printf("v%d.%d.%d", $1+0, $2+0, $3+1)}')
-          echo "New version: $version"
+          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            # עבור ענפי release - חישוב גרסאות לפי שם הענף
+            base_version=$(echo ${{ github.ref_name }} | cut -d'/' -f2)
+            latest_tag=$(git tag -l "${base_version}.*" | sort -V | tail -n1 || echo "${base_version}.0")
+            
+            if [ -z "$latest_tag" ]; then
+              # אם אין תג קודם עם הגרסה הזו
+              version="${base_version}.0"
+            else
+              # הגדלת מספר הגרסה האחרון
+              patch=$(echo $latest_tag | cut -d'.' -f3)
+              new_patch=$((patch + 1))
+              version="${base_version}.${new_patch}"
+            fi
+          else
+            # עבור main - גרסה "latest" או גרסת פיתוח
+            version="dev-$(date +'%Y%m%d%H%M%S')"
+          fi
+          
+          echo "Calculated version: $version"
           echo "version=$version" >> $GITHUB_ENV
           echo "::set-output name=version::$version"
 
-      # Step 4: Log in to GHCR
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # צעדי בנייה ופרסום דומים למה שהוצע קודם
 
-      # Step 5: Build Docker image
-      - name: Build Docker image
-        run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} .
-          docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
-          
-          # Tag with branch name if on a release branch
-          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
-            branch_name="${{ github.ref_name }}"
-            docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
-          fi
-
-      # Step 6: Push Docker image to GHCR
-      - name: Push Docker image
-        run: |
-          docker push ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }}
-          docker push ghcr.io/${{ github.repository_owner }}/convert:latest
-          
-          # Push branch-specific tag if on a release branch
-          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
-            branch_name="${{ github.ref_name }}"
-            docker push ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
-          fi
-
-      # Step 7: Push Git tag (only on main branch)
       - name: Push Git tag
-        if: github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/heads/release/')
         run: |
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"

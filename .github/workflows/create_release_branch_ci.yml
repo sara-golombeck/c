@@ -1,0 +1,79 @@
+name: Create Release Branch
+
+# This workflow allows you to create a release branch from a tag
+# It will be triggered manually and requires a tag parameter
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The Git tag to create release branch from'
+        required: true
+        type: string
+        
+jobs:
+  create-release-branch:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout the repository with full history
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # We need the full history to access all tags
+      
+      # Step 2: Verify the tag exists
+      - name: Verify tag exists
+        id: verify_tag
+        run: |
+          if ! git tag -l | grep -q "^${{ github.event.inputs.tag }}$"; then
+            echo "Error: Tag ${{ github.event.inputs.tag }} does not exist!"
+            exit 1
+          fi
+          
+          # Get the commit hash for the tag
+          TAG_COMMIT=$(git rev-parse ${{ github.event.inputs.tag }}^{commit})
+          echo "tag_commit=$TAG_COMMIT" >> $GITHUB_ENV
+          echo "Tag ${{ github.event.inputs.tag }} found at commit: $TAG_COMMIT"
+          
+          # Extract version without leading 'v' if present
+          VERSION=$(echo "${{ github.event.inputs.tag }}" | sed 's/^v//')
+          echo "version=$VERSION" >> $GITHUB_ENV
+      
+      # Step 3: Check if release branch already exists
+      - name: Check if branch exists
+        id: check_branch
+        run: |
+          BRANCH_NAME="release/${{ env.version }}"
+          if git ls-remote --heads origin $BRANCH_NAME | grep -q $BRANCH_NAME; then
+            echo "Warning: Branch $BRANCH_NAME already exists!"
+            exit 1
+          fi
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
+          
+      # Step 4: Create and push the release branch
+      - name: Create release branch
+        run: |
+          git checkout -b ${{ env.branch_name }} ${{ env.tag_commit }}
+          git push origin ${{ env.branch_name }}
+          echo "Successfully created release branch ${{ env.branch_name }} from tag ${{ github.event.inputs.tag }}"
+          
+      # Step 5: Add branch protection
+      - name: Set branch protection
+        uses: octokit/request-action@v2.x
+        with:
+          route: PUT /repos/{owner}/{repo}/branches/{branch}/protection
+          owner: ${{ github.repository_owner }}
+          repo: ${{ github.repository.name }}
+          branch: ${{ env.branch_name }}
+          required_status_checks: |
+            strict: true
+            contexts: []
+          enforce_admins: true
+          required_pull_request_reviews: |
+            dismissal_restrictions: {}
+            dismiss_stale_reviews: true
+            require_code_owner_reviews: true
+            required_approving_review_count: 1
+          restrictions: null
+        env:
+          GITHUB_TOKEN: ${{ secrets.ADMIN_TOKEN }}

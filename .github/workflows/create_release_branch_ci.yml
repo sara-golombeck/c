@@ -57,8 +57,3 @@ jobs:
           git push origin ${{ env.branch_name }}
           echo "Successfully created release branch ${{ env.branch_name }} from tag ${{ github.event.inputs.tag }}"
           
-      # Step 5: Reminder about branch protection
-      - name: Branch protection reminder
-        run: |
-          echo "IMPORTANT: Remember to set up branch protection for ${{ env.branch_name }} manually in the repository settings."
-          echo "Go to Settings > Branches > Branch protection rules > Add rule"

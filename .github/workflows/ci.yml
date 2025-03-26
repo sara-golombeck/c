@@ -18,29 +18,106 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Build test Docker image 
-      - name: Build test Docker image
+      # Step 2: Build Docker image for testing
+      - name: Build Docker image
         run: |
-          docker build -t app-test -f Dockerfile .
+          docker build -t app-test .
 
-      # Step 3: Create test directory structure
-      - name: Create test directories
+      # Step 3: Create test directories and files
+      - name: Setup test environment
         run: |
+          # Create output directory
           mkdir -p output
+          
+          # Create test_files directory and files for tests
           mkdir -p test_files
-          # Create test JPG file for testing
-          echo -n -e \\xff\\xd8\\xff\\xe0\\x00\\x10JFIF | dd of=test_files/test.jpg bs=1
+          mkdir -p test_files/jpg_directory
+          
+          # Create a single test jpg file
+          touch test_files/single_test.jpg
+          # Write minimal JPG header
+          echo -n -e \\xff\\xd8\\xff\\xe0\\x00\\x10JFIF\\x00\\x01\\x01 > test_files/single_test.jpg
+          
+          # Create multiple jpg files in directory
+          for i in {1..3}; do
+            touch test_files/jpg_directory/test_image_$i.JPG
+            echo -n -e \\xff\\xd8\\xff\\xe0\\x00\\x10JFIF\\x00\\x01\\x01 > test_files/jpg_directory/test_image_$i.JPG
+          done
+          
+          # Create a non-jpg file in directory
+          echo "This is not a JPG file" > test_files/jpg_directory/not_an_image.txt
 
-      # Step 4: Run tests with pytest in separate container
-      - name: Run tests
+      # Step 4: Run test for single jpg file
+      - name: Test single JPG conversion
         run: |
+          # Run test with single jpg
           docker run --rm \
-            -v $(pwd)/tests:/app/tests \
-            -v $(pwd)/output:/app/output \
+            -v $(pwd)/convert_image_to_pdf.py:/app/convert_image_to_pdf.py \
             -v $(pwd)/test_files:/app/test_files \
+            -v $(pwd)/output:/app/output \
             -w /app \
             app-test \
-            python -m pytest tests/ -v
+            python convert_image_to_pdf.py test_files/single_test.jpg
+          
+          # Check if output PDF exists
+          if [ ! -f "output/output.pdf" ]; then
+            echo "Single JPG test failed: PDF not created"
+            exit 1
+          fi
+          
+          # Test with custom name
+          docker run --rm \
+            -v $(pwd)/convert_image_to_pdf.py:/app/convert_image_to_pdf.py \
+            -v $(pwd)/test_files:/app/test_files \
+            -v $(pwd)/output:/app/output \
+            -e PDF_NAME=custom_output \
+            -w /app \
+            app-test \
+            python convert_image_to_pdf.py test_files/single_test.jpg
+          
+          # Check if custom named PDF exists
+          if [ ! -f "output/custom_output.pdf" ]; then
+            echo "Single JPG with custom name test failed: PDF not created"
+            exit 1
+          fi
+      
+      # Step 5: Run test for directory with jpg files
+      - name: Test directory with JPG conversion
+        run: |
+          # Clean previous output
+          rm -f output/*.pdf
+          
+          # Run test with directory
+          docker run --rm \
+            -v $(pwd)/convert_image_to_pdf.py:/app/convert_image_to_pdf.py \
+            -v $(pwd)/test_files:/app/test_files \
+            -v $(pwd)/output:/app/output \
+            -w /app \
+            app-test \
+            python convert_image_to_pdf.py test_files/jpg_directory
+          
+          # Check if output PDF exists
+          if [ ! -f "output/output.pdf" ]; then
+            echo "Directory JPG test failed: PDF not created"
+            exit 1
+          fi
+          
+          # Test with custom name
+          rm -f output/*.pdf
+          docker run --rm \
+            -v $(pwd)/convert_image_to_pdf.py:/app/convert_image_to_pdf.py \
+            -v $(pwd)/test_files:/app/test_files \
+            -v $(pwd)/output:/app/output \
+            -e PDF_NAME=dir_output \
+            -w /app \
+            app-test \
+            python convert_image_to_pdf.py test_files/jpg_directory
+          
+          # Check if custom named PDF exists
+          if [ ! -f "output/dir_output.pdf" ]; then
+            echo "Directory JPG with custom name test failed: PDF not created"
+            exit 1
+          fi
 
   build-and-push:
     needs: test

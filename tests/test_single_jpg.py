@@ -23,7 +23,7 @@ def setup_output_directory():
 def test_convert_single_jpg(setup_output_directory):
     """Test converting a single JPG file to PDF"""
     # Arrange
-    test_file = "tests/test_data/pic1.JPG"
+    test_file = "tests/test_data/joseph-corl-iFg78nqsMho-unsplash.jpg"
     output_file = "output/output.pdf"
     
     # Assert file exists before test
@@ -44,7 +44,7 @@ def test_convert_single_jpg(setup_output_directory):
 def test_convert_single_jpg_with_custom_name(setup_output_directory):
     """Test converting a single JPG file to PDF with custom name"""
     # Arrange
-    test_file = "tests/test_data/pic1.JPG"
+    test_file = "tests/test_data/joseph-corl-iFg78nqsMho-unsplash.jpg"
     custom_name = "custom_output"
     output_file = f"output/{custom_name}.pdf"
     

@@ -18,118 +18,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Build Docker image for testing
-      - name: Build Docker image
-        run: |
-          docker build -t app-test .
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-      # Step 3: Create test directories and files
-      - name: Setup test environment
+      # Step 3: Install dependencies
+      - name: Install dependencies
         run: |
-          # Create output directory
-          mkdir -p output
-          
-          # Create test_files directory and files for tests
-          mkdir -p test_files
-          mkdir -p test_files/jpg_directory
-          
-          # Create a single test jpg file
-          touch test_files/single_test.jpg
-          # Write minimal JPG header
-          echo -n -e \\xff\\xd8\\xff\\xe0\\x00\\x10JFIF\\x00\\x01\\x01 > test_files/single_test.jpg
-          
-          # Create multiple jpg files in directory
-          for i in {1..3}; do
-            touch test_files/jpg_directory/test_image_$i.JPG
-            echo -n -e \\xff\\xd8\\xff\\xe0\\x00\\x10JFIF\\x00\\x01\\x01 > test_files/jpg_directory/test_image_$i.JPG
-          done
-          
-          # Create a non-jpg file in directory
-          echo "This is not a JPG file" > test_files/jpg_directory/not_an_image.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      # Step 4: Run test for single jpg file
-      - name: Test single JPG conversion
+      # Step 4: Run tests
+      - name: Run pytest
         run: |
-          # Run test with single jpg
-          docker run --rm \
-            -v $(pwd)/convert_image_to_pdf.py:/app/convert_image_to_pdf.py \
-            -v $(pwd)/test_files:/app/test_files \
-            -v $(pwd)/output:/app/output \
-            -w /app \
-            app-test \
-            python convert_image_to_pdf.py test_files/single_test.jpg
-          
-          # Check if output PDF exists
-          if [ ! -f "output/output.pdf" ]; then
-            echo "Single JPG test failed: PDF not created"
-            exit 1
-          fi
-          
-          # Test with custom name
-          docker run --rm \
-            -v $(pwd)/convert_image_to_pdf.py:/app/convert_image_to_pdf.py \
-            -v $(pwd)/test_files:/app/test_files \
-            -v $(pwd)/output:/app/output \
-            -e PDF_NAME=custom_output \
-            -w /app \
-            app-test \
-            python convert_image_to_pdf.py test_files/single_test.jpg
-          
-          # Check if custom named PDF exists
-          if [ ! -f "output/custom_output.pdf" ]; then
-            echo "Single JPG with custom name test failed: PDF not created"
-            exit 1
-          fi
-      
-      # Step 5: Run test for directory with jpg files
-      - name: Test directory with JPG conversion
-        run: |
-          # Clean previous output
-          rm -f output/*.pdf
-          
-          # Run test with directory
-          docker run --rm \
-            -v $(pwd)/convert_image_to_pdf.py:/app/convert_image_to_pdf.py \
-            -v $(pwd)/test_files:/app/test_files \
-            -v $(pwd)/output:/app/output \
-            -w /app \
-            app-test \
-            python convert_image_to_pdf.py test_files/jpg_directory
-          
-          # Check if output PDF exists
-          if [ ! -f "output/output.pdf" ]; then
-            echo "Directory JPG test failed: PDF not created"
-            exit 1
-          fi
-          
-          # Test with custom name
-          rm -f output/*.pdf
-          docker run --rm \
-            -v $(pwd)/convert_image_to_pdf.py:/app/convert_image_to_pdf.py \
-            -v $(pwd)/test_files:/app/test_files \
-            -v $(pwd)/output:/app/output \
-            -e PDF_NAME=dir_output \
-            -w /app \
-            app-test \
-            python convert_image_to_pdf.py test_files/jpg_directory
-          
-          # Check if custom named PDF exists
-          if [ ! -f "output/dir_output.pdf" ]; then
-            echo "Directory JPG with custom name test failed: PDF not created"
-            exit 1
-          fi
+          pytest tests/ -v
 
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
-    # Run only on main or release branches, not on pull requests
-    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/release/'))
+    # Only run this job on main or release branches, not on PRs
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
     steps:
       # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Fetch all history for proper versioning
 
       # Step 2: Set up Docker
       - name: Set up Docker
@@ -139,18 +53,10 @@ jobs:
       - name: Calculate new version
         id: version
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            # For main branch, increment patch version
-            latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-            echo "Latest tag: $latest_tag"
-            version=$(echo $latest_tag | awk -F. '{printf("v%d.%d.%d", $1+0, $2+0, $3+1)}')
-            echo "New version: $version"
-          else
-            # For release branches, use branch name as version
-            branch_name="${{ github.ref }}"
-            version=${branch_name#refs/heads/release/}
-            echo "Release version: $version"
-          fi
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $latest_tag"
+          version=$(echo $latest_tag | awk -F. '{printf("v%d.%d.%d", $1+0, $2+0, $3+1)}')
+          echo "New version: $version"
           echo "version=$version" >> $GITHUB_ENV
           echo "::set-output name=version::$version"
 
@@ -166,23 +72,27 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} .
+          docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
           
-          # Tag as latest only from main branch
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
+          # Tag with branch name if on a release branch
+          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            branch_name="${{ github.ref_name }}"
+            docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
           fi
 
       # Step 6: Push Docker image to GHCR
       - name: Push Docker image
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }}
+          docker push ghcr.io/${{ github.repository_owner }}/convert:latest
           
-          # Push latest tag only from main branch
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            docker push ghcr.io/${{ github.repository_owner }}/convert:latest
+          # Push branch-specific tag if on a release branch
+          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            branch_name="${{ github.ref_name }}"
+            docker push ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
           fi
 
-      # Step 7: Push Git tag (only from main branch)
+      # Step 7: Push Git tag (only on main branch)
       - name: Push Git tag
         if: github.ref == 'refs/heads/main'
         run: |

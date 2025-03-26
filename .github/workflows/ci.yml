@@ -1,64 +1,3 @@
-# name: CI
-
-# on:
-#   push:
-#     branches:
-#       - main
-
-# jobs:
-#   build-and-push:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       # Step 1: Checkout the code
-#       - name: Checkout code
-#         uses: actions/checkout@v3
-
-#       # Step 2: Set up Docker
-#       - name: Set up Docker
-#         uses: docker/setup-buildx-action@v2
-
-#       # Step 3: Calculate new version
-#       - name: Calculate new version
-#         id: version
-#         run: |
-#           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-#           echo "Latest tag: $latest_tag"
-#           version=$(echo $latest_tag | awk -F. '{printf("v%d.%d.%d", $1+0, $2+0, $3+1)}')
-#           echo "New version: $version"
-#           echo "version=$version" >> $GITHUB_ENV
-#           echo "::set-output name=version::$version"
-
-#       # Step 4: Log in to GHCR
-#       - name: Log in to GitHub Container Registry
-#         uses: docker/login-action@v2
-#         with:
-#           registry: ghcr.io
-#           username: ${{ github.actor }}
-#           password: ${{ secrets.GITHUB_TOKEN }}
-
-#       # Step 5: Build Docker image
-#       - name: Build Docker image
-#         run: |
-#           docker build -t ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} .
-#           docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
-
-#       # Step 6: Push Docker image to GHCR
-#       - name: Push Docker image
-#         run: |
-#           docker push ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }}
-#           docker push ghcr.io/${{ github.repository_owner }}/convert:latest
-
-#       # Step 7: Push Git tag
-#       - name: Push Git tag
-#         run: |
-#           git config user.name "${{ github.actor }}"
-#           git config user.email "${{ github.actor }}@users.noreply.github.com"
-#           git tag ${{ env.version }}
-#           git push origin ${{ env.version }}
-
-
-
 name: CI
 
 on:
@@ -79,37 +18,100 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Build test Docker image 
-      - name: Build test Docker image
-        run: |
-          docker build -t app-test -f Dockerfile .
+      # Step 2: Set up Python environment for tests
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-      # Step 3: Create test directory structure
-      - name: Create test directories
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 4: Create test directories and files
+      - name: Create test files
         run: |
           mkdir -p output
-          mkdir -p test_files
-          # Create test JPG file for testing
-          echo -n -e \\xff\\xd8\\xff\\xe0\\x00\\x10JFIF | dd of=test_files/test.jpg bs=1
+          
+          # Create test directory with JPG files
+          mkdir -p test_files/jpg_directory
+          
+          # Create a sample JPG file
+          python -c "with open('test_files/test_sample.jpg', 'wb') as f: f.write(b'\xff\xd8\xff\xe0\x00\x10JFIF')"
+          
+          # Create multiple JPG files in directory
+          for i in {1..3}; do
+            python -c "with open('test_files/jpg_directory/test_image_${i}.JPG', 'wb') as f: f.write(b'\xff\xd8\xff\xe0\x00\x10JFIF')"
+          done
+          
+          # Create a non-JPG file in the directory
+          echo "This is not a JPG" > test_files/jpg_directory/not_image.txt
 
-      # Step 4: Run tests with pytest in separate container
+      # Step 5: Create the test files
+      - name: Create test scripts
+        run: |
+          cat > tests/test_single_jpg.py << 'EOF'
+          import os
+          import pytest
+          import subprocess
+          from pathlib import Path
+
+          class TestSingleJpg:
+              def test_single_jpg_conversion(self):
+                  """בדיקת המרת קובץ JPG בודד ל-PDF"""
+                  test_jpg = Path("test_files/test_sample.jpg")
+                  assert test_jpg.exists(), "קובץ הבדיקה לא נמצא"
+                  
+                  # הרצת הסקריפט עם קובץ בודד
+                  result = subprocess.run(
+                      ["python", "convert_image_to_pdf.py", str(test_jpg)],
+                      capture_output=True,
+                      text=True
+                  )
+                  
+                  # בדיקת ההצלחה
+                  assert result.returncode == 0, f"הסקריפט נכשל עם קוד שגיאה {result.returncode}: {result.stderr}"
+                  
+                  # בדיקה שהקובץ נוצר
+                  output_pdf = Path("output/output.pdf")
+                  assert output_pdf.exists(), "קובץ ה-PDF לא נוצר"
+                  assert output_pdf.stat().st_size > 0, "קובץ ה-PDF ריק"
+          EOF
+          
+          cat > tests/test_directory_with_jpg.py << 'EOF'
+          import os
+          import pytest
+          import subprocess
+          from pathlib import Path
+
+          class TestDirectoryWithJpg:
+              def test_directory_conversion(self):
+                  """בדיקת המרת תיקייה עם קבצי JPG ל-PDF"""
+                  test_dir = Path("test_files/jpg_directory")
+                  assert test_dir.exists(), "תיקיית הבדיקה לא נמצאה"
+                  
+                  # הרצת הסקריפט עם תיקייה
+                  result = subprocess.run(
+                      ["python", "convert_image_to_pdf.py", str(test_dir)],
+                      capture_output=True,
+                      text=True
+                  )
+                  
+                  # בדיקת ההצלחה
+                  assert result.returncode == 0, f"הסקריפט נכשל עם קוד שגיאה {result.returncode}: {result.stderr}"
+                  
+                  # בדיקה שהקובץ נוצר
+                  output_pdf = Path("output/output.pdf")
+                  assert output_pdf.exists(), "קובץ ה-PDF לא נוצר"
+                  assert output_pdf.stat().st_size > 0, "קובץ ה-PDF ריק"
+          EOF
+
+      # Step 6: Run the tests
       - name: Run tests
         run: |
-          # ליצור תיקיות וקבצי בדיקה
-          mkdir -p output
-          mkdir -p test_files
-          
-          # להעתיק את קבצי הבדיקה לתיקייה המתאימה
-          # יצור קובץ JPG לדוגמה לבדיקות
-          echo -e '\xff\xd8\xff\xe0\x00\x10JFIF' > test_files/test.jpg
-          
-          # להריץ את הבדיקות בתוך הקונטיינר עם הפרמטרים הנכונים
-          docker run --rm \
-            -v $(pwd)/tests:/app/tests \
-            -v $(pwd)/output:/app/output \
-            -v $(pwd)/test_files:/app/test_files \
-            app-test \
-            pytest tests/ -v
+          python -m pytest tests/ -v
 
   build-and-push:
     needs: test

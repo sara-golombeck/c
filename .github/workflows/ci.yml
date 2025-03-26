@@ -4,11 +4,11 @@
 # #   push:
 # #     branches:
 # #       - main
-# #       - 'release/**'
+# #       - 'release.**'
 # #   pull_request:
 # #     branches:
 # #       - main
-# #       - 'release/**'
+# #       - 'release.**'
 
 # # jobs:
 # #   test:
@@ -39,7 +39,7 @@
 # #     needs: test
 # #     runs-on: ubuntu-latest
 # #     # Only run this job on main or release branches, not on PRs
-# #     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+# #     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release.'))
 # #     steps:
 # #       # Step 1: Checkout the code
 # #       - name: Checkout code
@@ -75,7 +75,7 @@
 # #           docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
           
 # #           # Tag with branch name if on a release branch
-# #           if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+# #           if [[ "${{ github.ref }}" == refs/heads/release.* ]]; then
 # #             branch_name="${{ github.ref_name }}"
 # #             docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
 # #           fi
@@ -87,7 +87,7 @@
 # #           docker push ghcr.io/${{ github.repository_owner }}/convert:latest
           
 # #           # Push branch-specific tag if on a release branch
-# #           if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+# #           if [[ "${{ github.ref }}" == refs/heads/release.* ]]; then
 # #             branch_name="${{ github.ref_name }}"
 # #             docker push ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
 # #           fi
@@ -113,11 +113,11 @@
 #   push:
 #     branches:
 #       - main
-#       - 'release/**'
+#       - 'release.**'
 #   pull_request:
 #     branches:
 #       - main
-#       - 'release/**'
+#       - 'release.**'
 
 # jobs:
 #   test:
@@ -148,7 +148,7 @@
 #     needs: test
 #     runs-on: ubuntu-latest
 #     # Only run this job on main or release branches, not on PRs
-#     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+#     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release.'))
 #     steps:
 #       # Step 1: Checkout the code with full history
 #       - name: Checkout code
@@ -164,7 +164,7 @@
 #       - name: Calculate version
 #         id: version
 #         run: |
-#           if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+#           if [[ "${{ github.ref }}" == refs/heads/release.* ]]; then
 #             # For release branches - calculate version based on branch name
 #             base_version=$(echo ${{ github.ref_name }} | cut -d'/' -f2)
             
@@ -206,7 +206,7 @@
 #           docker build -t ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} .
           
 #           # Additional tags based on branch
-#           if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+#           if [[ "${{ github.ref }}" == refs/heads/release.* ]]; then
 #             # For release branches - tag with "stable" and branch name
 #             branch_name="${{ github.ref_name }}"
 #             docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
@@ -223,7 +223,7 @@
 #           docker push ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }}
           
 #           # Push additional tags based on branch
-#           if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+#           if [[ "${{ github.ref }}" == refs/heads/release.* ]]; then
 #             # For release branches - push "stable" and branch name tags
 #             branch_name="${{ github.ref_name }}"
 #             docker push ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
@@ -235,7 +235,7 @@
 
 #       # Step 7: Create and push Git tag (only on release branches)
 #       - name: Create and push Git tag
-#         if: startsWith(github.ref, 'refs/heads/release/')
+#         if: startsWith(github.ref, 'refs/heads/release.')
 #         run: |
 #           git config user.name "${{ github.actor }}"
 #           git config user.email "${{ github.actor }}@users.noreply.github.com"
@@ -251,11 +251,11 @@ on:
   push:
     branches:
       - main
-      - 'release/**'
+      - 'release.**'
   pull_request:
     branches:
       - main
-      - 'release/**'
+      - 'release.**'
 
 jobs:
   test:
@@ -286,7 +286,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     # Only run this job on main or release branches, not on PRs
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release.'))
     steps:
       # Step 1: Checkout the code with full history
       - name: Checkout code
@@ -302,7 +302,7 @@ jobs:
       - name: Calculate version
         id: version
         run: |
-          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+          if [[ "${{ github.ref }}" == refs/heads/release.* ]]; then
             # For release branches - calculate version based on branch name
             base_version=$(echo ${{ github.ref_name }} | cut -d'/' -f2)
             
@@ -344,7 +344,7 @@ jobs:
           docker build -t ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} .
           
           # Additional tags based on branch
-          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+          if [[ "${{ github.ref }}" == refs/heads/release.* ]]; then
             # For release branches - tag with "stable" and branch name
             branch_name="${{ github.ref_name }}"
             docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
@@ -361,7 +361,7 @@ jobs:
           docker push ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }}
           
           # Push additional tags based on branch
-          if [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+          if [[ "${{ github.ref }}" == refs/heads/release.* ]]; then
             # For release branches - push "stable" and branch name tags
             branch_name="${{ github.ref_name }}"
             docker push ghcr.io/${{ github.repository_owner }}/convert:${branch_name}
@@ -373,7 +373,7 @@ jobs:
 
       # Step 7: Create and push Git tag (only on release branches)
       - name: Create and push Git tag
-        if: startsWith(github.ref, 'refs/heads/release/')
+        if: startsWith(github.ref, 'refs/heads/release.')
         run: |
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"

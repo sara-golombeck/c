@@ -6,7 +6,7 @@ RUN apt update
 
 RUN apt install -y curl
 # download certificate
-RUN curl -sL https://netfree.link/dl/unix-ca.sh | sh
+# RUN curl -sL https://netfree.link/dl/unix-ca.sh | sh
 # pip config
 RUN pip config set global.cert /usr/lib/ssl/certs/ca-certificates.crt
 

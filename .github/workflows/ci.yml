@@ -95,13 +95,21 @@ jobs:
       # Step 4: Run tests with pytest in separate container
       - name: Run tests
         run: |
+          # ליצור תיקיות וקבצי בדיקה
+          mkdir -p output
+          mkdir -p test_files
+          
+          # להעתיק את קבצי הבדיקה לתיקייה המתאימה
+          # יצור קובץ JPG לדוגמה לבדיקות
+          echo -e '\xff\xd8\xff\xe0\x00\x10JFIF' > test_files/test.jpg
+          
+          # להריץ את הבדיקות בתוך הקונטיינר עם הפרמטרים הנכונים
           docker run --rm \
             -v $(pwd)/tests:/app/tests \
             -v $(pwd)/output:/app/output \
             -v $(pwd)/test_files:/app/test_files \
-            -w /app \
             app-test \
-            python -m pytest tests/ -v
+            pytest tests/ -v
 
   build-and-push:
     needs: test

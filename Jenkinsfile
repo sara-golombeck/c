@@ -6,6 +6,8 @@ pipeline {
         CONTAINER_NAME = 'pytest-container'
     }
 
+
+
     stages {
         stage('Checkout') {
             steps {

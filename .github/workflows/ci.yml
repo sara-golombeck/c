@@ -335,7 +335,6 @@
 
 
 
-
 # The latest
 name: CI/CD Pipeline
 
@@ -452,11 +451,14 @@ jobs:
             # Main branch gets 'latest-dev' tag
             docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest-dev
           elif [[ "$BRANCH_NAME" =~ ^release/ ]]; then
+            # Create a safe tag name by replacing '/' with '-'
+            SAFE_BRANCH_NAME=$(echo ${BRANCH_NAME} | sed 's/\//-/g')
+            
             # Release branch gets 'stable' tag
             docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:stable
             
-            # Also tag with branch name for specific reference
-            docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:${BRANCH_NAME}
+            # Also tag with safe branch name for specific reference
+            docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:${SAFE_BRANCH_NAME}
           fi
         
       # Step 6: Push Docker image to GHCR
@@ -472,8 +474,11 @@ jobs:
           if [[ "$BRANCH_NAME" == "main" ]]; then
             docker push ghcr.io/${{ github.repository_owner }}/convert:latest-dev
           elif [[ "$BRANCH_NAME" =~ ^release/ ]]; then
+            # Create a safe tag name by replacing '/' with '-'
+            SAFE_BRANCH_NAME=$(echo ${BRANCH_NAME} | sed 's/\//-/g')
+            
             docker push ghcr.io/${{ github.repository_owner }}/convert:stable
-            docker push ghcr.io/${{ github.repository_owner }}/convert:${BRANCH_NAME}
+            docker push ghcr.io/${{ github.repository_owner }}/convert:${SAFE_BRANCH_NAME}
           fi
         
       # Step 7: Create and push Git tag (only on release branches)

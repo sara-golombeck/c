@@ -248,12 +248,108 @@
 
 
 
-# The first with Tests 
-name: CI
+# # The first with Tests 
+# name: CI
+# on:
+#   push:
+#     branches:
+#       - main
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#     steps:
+#       # Step 1: Checkout the code
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+      
+#       # Step 2: Set up Python
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: '3.9'
+      
+#       # Step 3: Install dependencies
+#       - name: Install dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install -r requirements.txt
+      
+#       # Step 4: Run tests
+#       - name: Run pytest
+#         run: |
+#           pytest tests/ -v
+
+#   build-and-push:
+#     needs: test
+#     runs-on: ubuntu-latest
+#     steps:
+#       # Step 1: Checkout the code
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+      
+#       # Step 2: Set up Docker
+#       - name: Set up Docker
+#         uses: docker/setup-buildx-action@v2
+      
+#       # Step 3: Calculate new version
+#       - name: Calculate new version
+#         id: version
+#         run: |
+#           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+#           echo "Latest tag: $latest_tag"
+#           version=$(echo $latest_tag | awk -F. '{printf("v%d.%d.%d", $1+0, $2+0, $3+1)}')
+#           echo "New version: $version"
+#           echo "version=$version" >> $GITHUB_ENV
+#           echo "::set-output name=version::$version"
+      
+#       # Step 4: Log in to GHCR
+#       - name: Log in to GitHub Container Registry
+#         uses: docker/login-action@v2
+#         with:
+#           registry: ghcr.io
+#           username: ${{ github.actor }}
+#           password: ${{ secrets.GITHUB_TOKEN }}
+      
+#       # Step 5: Build Docker image
+#       - name: Build Docker image
+#         run: |
+#           docker build -t ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} .
+#           docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
+      
+#       # Step 6: Push Docker image to GHCR
+#       - name: Push Docker image
+#         run: |
+#           docker push ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }}
+#           docker push ghcr.io/${{ github.repository_owner }}/convert:latest
+      
+#       # Step 7: Push Git tag
+#       - name: Push Git tag
+#         run: |
+#           git config user.name "${{ github.actor }}"
+#           git config user.email "${{ github.actor }}@users.noreply.github.com"
+#           git tag ${{ env.version }}
+#           git push origin ${{ env.version }}
+
+
+
+
+
+
+
+# The latest
+
+name: CI/CD Pipeline
+
 on:
   push:
     branches:
       - main
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - 'release/**'
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -261,19 +357,21 @@ jobs:
       # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
-      
+        with:
+          fetch-depth: 0  # Fetches all history for tags and branches
+        
       # Step 2: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      
+        
       # Step 3: Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      
+        
       # Step 4: Run tests
       - name: Run pytest
         run: |
@@ -281,27 +379,57 @@ jobs:
 
   build-and-push:
     needs: test
+    # Only run this job for main and release branches, not for PRs
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/heads/release/') || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
       # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
-      
+        with:
+          fetch-depth: 0  # Fetches all history for tags and branches
+        
       # Step 2: Set up Docker
       - name: Set up Docker
         uses: docker/setup-buildx-action@v2
-      
-      # Step 3: Calculate new version
-      - name: Calculate new version
+        
+      # Step 3: Calculate version based on branch
+      - name: Calculate version
         id: version
         run: |
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Latest tag: $latest_tag"
-          version=$(echo $latest_tag | awk -F. '{printf("v%d.%d.%d", $1+0, $2+0, $3+1)}')
+          # Get current branch name
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          echo "Branch: $BRANCH_NAME"
+          
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            # For main branch, this is a development version
+            latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            # Increment patch version and add -dev suffix
+            version=$(echo $latest_tag | awk -F. '{printf("v%d.%d.%d-dev", $1+0, $2+0, $3+1)}')
+          elif [[ "$BRANCH_NAME" =~ ^release/v([0-9]+)\.([0-9]+)$ ]]; then
+            # For release branches, use branch version with patch level
+            major=${BASH_REMATCH[1]}
+            minor=${BASH_REMATCH[2]}
+            
+            # Find the highest patch version for this major.minor
+            highest_patch=$(git tag -l "v${major}.${minor}.*" | sort -V | tail -n 1 | awk -F. '{print $3}' || echo "0")
+            
+            # If no existing tag, start at 0
+            if [[ -z "$highest_patch" ]]; then
+              highest_patch=0
+            fi
+            
+            # New version is current patch + 1
+            version="v${major}.${minor}.$((highest_patch + 1))"
+          else
+            echo "Unsupported branch pattern for versioning"
+            exit 1
+          fi
+          
           echo "New version: $version"
           echo "version=$version" >> $GITHUB_ENV
           echo "::set-output name=version::$version"
-      
+        
       # Step 4: Log in to GHCR
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v2
@@ -309,23 +437,78 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      # Step 5: Build Docker image
+        
+      # Step 5: Build Docker image with appropriate tags
       - name: Build Docker image
         run: |
+          # Get current branch name
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          
+          # Build with version tag
           docker build -t ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} .
-          docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
-      
+          
+          # Tag appropriately based on branch
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            # Main branch gets 'latest-dev' tag
+            docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest-dev
+          elif [[ "$BRANCH_NAME" =~ ^release/v([0-9]+)\.([0-9]+)$ ]]; then
+            # Release branch - if it's the newest release branch, tag as 'latest'
+            major=${BASH_REMATCH[1]}
+            minor=${BASH_REMATCH[2]}
+            
+            # Check if this is the highest release branch
+            highest_release=$(git branch -r | grep "release/v" | sort -V | tail -n 1 || echo "")
+            current_release="release/v${major}.${minor}"
+            
+            if [[ "$highest_release" == *"$current_release"* ]]; then
+              echo "This is the newest release branch, tagging as latest"
+              docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:latest
+            fi
+            
+            # Also tag with major.minor for stable references
+            docker tag ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }} ghcr.io/${{ github.repository_owner }}/convert:v${major}.${minor}
+          fi
+        
       # Step 6: Push Docker image to GHCR
       - name: Push Docker image
         run: |
+          # Push version-specific tag
           docker push ghcr.io/${{ github.repository_owner }}/convert:${{ env.version }}
-          docker push ghcr.io/${{ github.repository_owner }}/convert:latest
-      
-      # Step 7: Push Git tag
-      - name: Push Git tag
+          
+          # Get current branch name
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          
+          # Push appropriate additional tags
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            docker push ghcr.io/${{ github.repository_owner }}/convert:latest-dev
+          elif [[ "$BRANCH_NAME" =~ ^release/v([0-9]+)\.([0-9]+)$ ]]; then
+            major=${BASH_REMATCH[1]}
+            minor=${BASH_REMATCH[2]}
+            
+            # Push major.minor tag
+            docker push ghcr.io/${{ github.repository_owner }}/convert:v${major}.${minor}
+            
+            # Check if we should push latest
+            highest_release=$(git branch -r | grep "release/v" | sort -V | tail -n 1 || echo "")
+            current_release="release/v${major}.${minor}"
+            
+            if [[ "$highest_release" == *"$current_release"* ]]; then
+              docker push ghcr.io/${{ github.repository_owner }}/convert:latest
+            fi
+          fi
+        
+      # Step 7: Create and push Git tag if release branch
+      - name: Create and push Git tag
+        if: startsWith(github.ref, 'refs/heads/release/')
         run: |
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
-          git tag ${{ env.version }}
-          git push origin ${{ env.version }}
+          
+          # Only create tag if it doesn't exist yet
+          if ! git tag -l | grep -q "^${{ env.version }}$"; then
+            git tag ${{ env.version }}
+            git push origin ${{ env.version }}
+            echo "Created and pushed new tag: ${{ env.version }}"
+          else
+            echo "Tag ${{ env.version }} already exists, skipping tag creation"
+          fi

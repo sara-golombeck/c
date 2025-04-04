@@ -30,7 +30,7 @@ def test_convert_directory_with_jpg(setup_output_directory):
     assert os.path.isdir(test_dir), f"Test directory {test_dir} not found"
     
     # Assert directory contains JPG files
-    jpg_files = [f for f in os.listdir(test_dir) if f.endswith(".JPG")]
+    jpg_files = [f for f in os.listdir(test_dir) if f.endswith(".jpg")]
     assert len(jpg_files) > 0, f"No JPG files found in {test_dir}"
     
     # Act
